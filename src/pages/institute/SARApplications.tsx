@@ -23,6 +23,17 @@ export default function SARApplications() {
   const [showDepartmentSelection, setShowDepartmentSelection] = useState(false);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
+  // Institute Information data with state for progress tracking
+  const [instituteInfo, setInstituteInfo] = useState({
+    applicationId: 'RGUKT-IS-20250905',
+    department: 'Institute Information',
+    status: 'Draft',
+    progress: 0,
+    startDate: '6 Sept 2025',
+    lastModified: '6 Sept 2025',
+    modifiedBy: 'rgukt@example.com'
+  });
+
   // Department SAR Applications data - now using state to allow adding new applications
   const [departmentApplications, setDepartmentApplications] = useState<SARApplication[]>([
     {
@@ -44,6 +55,30 @@ export default function SARApplications() {
       modifiedBy: 'rgukt@example.com'
     }
   ]);
+
+  const handleProgressUpdate = (applicationId: string, progress: number) => {
+    // Update institute info progress
+    if (applicationId === instituteInfo.applicationId) {
+      setInstituteInfo(prev => ({
+        ...prev,
+        progress,
+        lastModified: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      }));
+    } else {
+      // Update department application progress
+      setDepartmentApplications(prev => 
+        prev.map(app => 
+          app.applicationId === applicationId 
+            ? { 
+                ...app, 
+                progress, 
+                lastModified: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+              }
+            : app
+        )
+      );
+    }
+  };
 
   const handleFillForm = (applicationId: string) => {
     setSelectedApplicationId(applicationId);
@@ -108,17 +143,6 @@ export default function SARApplications() {
     // Show success message
     const applicationIds = newApplications.map(app => app.applicationId).join(', ');
     alert(`${newApplications.length} SAR Application(s) created successfully!\nApplication IDs: ${applicationIds}`);
-  };
-
-  // Institute Information data
-  const instituteInfo = {
-    applicationId: 'RGUKT-IS-20250905',
-    department: 'Institute Information',
-    status: 'Draft',
-    progress: 0,
-    startDate: '6 Sept 2025',
-    lastModified: '6 Sept 2025',
-    modifiedBy: 'rgukt@example.com'
   };
 
   const departments = [
@@ -414,6 +438,7 @@ export default function SARApplications() {
         isOpen={isFormOpen}
         onClose={handleCloseForm}
         applicationId={selectedApplicationId}
+        onProgressUpdate={handleProgressUpdate}
       />
     </InstituteLayout>
   );

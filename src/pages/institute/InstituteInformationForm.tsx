@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit2, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface InstituteInformationFormProps {
   isOpen: boolean;
   onClose: () => void;
   applicationId: string;
+  onProgressUpdate?: (applicationId: string, progress: number) => void;
 }
 
 interface OtherInstitution {
@@ -49,11 +50,9 @@ interface AccreditationProgram {
   program: string;
 }
 
-export default function InstituteInformationForm({ isOpen, onClose, applicationId }: InstituteInformationFormProps) {
+export default function InstituteInformationForm({ isOpen, onClose, applicationId, onProgressUpdate }: InstituteInformationFormProps) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   
-  // Part 1 Form Data (Updated Fields 1-5)
   const [formData, setFormData] = useState({
     nameAndAddressOfInstitution: '',
     nameAndAddressOfAffiliatingUniversity: '',
@@ -63,7 +62,6 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
     ownershipStatusOther: ''
   });
 
-  // Part 2 Form Data (Fields 6-8)
   const [otherInstitutions, setOtherInstitutions] = useState<OtherInstitution[]>([
     { id: '1', nameOfInstitution: '', yearOfEstablishment: '', programsOfStudy: '', location: '' }
   ]);
@@ -102,37 +100,82 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
         : prev[field].filter(item => item !== value)
     }));
 
-    // Clear the "other" text field if "Any other specify" is unchecked
     if (field === 'ownershipStatus' && value === 'Any other specify' && !checked) {
       setFormData(prev => ({ ...prev, ownershipStatusOther: '' }));
     }
   };
 
-  const handleNextStep = () => {
-    if (currentStep < 2) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
+  const calculateProgress = () => {
+    let completedFields = 0;
+    const totalFields = 8;
 
-  const handlePreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    if (formData.nameAndAddressOfInstitution.trim()) completedFields++;
+    if (formData.nameAndAddressOfAffiliatingUniversity.trim()) completedFields++;
+    if (formData.yearOfEstablishment.trim()) completedFields++;
+    if (formData.typeOfInstitution.length > 0) completedFields++;
+    if (formData.ownershipStatus.length > 0) completedFields++;
+
+    const hasOtherInstitutionData = otherInstitutions.some(inst => 
+      inst.nameOfInstitution.trim() || inst.yearOfEstablishment.trim() || 
+      inst.programsOfStudy.trim() || inst.location.trim()
+    );
+    if (hasOtherInstitutionData) completedFields++;
+
+    const hasProgramDetailData = programDetails.some(prog => 
+      prog.nameOfProgram.trim() || prog.programAppliedLevel.trim() || 
+      prog.startOfYear.trim() || prog.yearOfAICTEApproval.trim()
+    );
+    if (hasProgramDetailData) completedFields++;
+
+    const hasAccreditationProgramData = accreditationPrograms.some(prog => 
+      prog.level.trim() || prog.discipline.trim() || prog.program.trim()
+    );
+    if (hasAccreditationProgramData) completedFields++;
+
+    return Math.round((completedFields / totalFields) * 100);
   };
 
   const handleSave = () => {
-    // Save logic here - you can integrate with your backend
-    console.log('Saving form data:', {
+    const progress = calculateProgress();
+    
+    const savedData = {
+      applicationId,
       part1: formData,
       part2: {
         otherInstitutions,
         programDetails,
         accreditationPrograms
-      }
-    });
-    alert('Form data saved successfully!');
+      },
+      progress,
+      lastUpdated: new Date().toISOString()
+    };
+
+    localStorage.setItem(`institute_form_${applicationId}`, JSON.stringify(savedData));
+    
+    if (onProgressUpdate) {
+      onProgressUpdate(applicationId, progress);
+    }
+    
+    alert(`Form data saved successfully! Progress: ${progress}%`);
     onClose();
   };
+
+  const loadSavedData = () => {
+    const savedData = localStorage.getItem(`institute_form_${applicationId}`);
+    if (savedData) {
+      const parsed = JSON.parse(savedData);
+      setFormData(parsed.part1 || formData);
+      setOtherInstitutions(parsed.part2?.otherInstitutions || otherInstitutions);
+      setProgramDetails(parsed.part2?.programDetails || programDetails);
+      setAccreditationPrograms(parsed.part2?.accreditationPrograms || accreditationPrograms);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadSavedData();
+    }
+  }, [isOpen]);
 
   // Other Institutions Table Functions
   const addOtherInstitution = () => {
@@ -237,6 +280,8 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
     'Any other specify'
   ];
 
+  const currentProgress = calculateProgress();
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -246,6 +291,9 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
             <div className="flex items-center gap-2">
               <Badge variant="outline">
                 Step {currentStep} of 2
+              </Badge>
+              <Badge variant="secondary">
+                Progress: {currentProgress}%
               </Badge>
             </div>
           </DialogTitle>
@@ -260,7 +308,6 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Field 1: Name and Address of Institution */}
               <div className="space-y-2">
                 <Label htmlFor="nameAndAddressOfInstitution">1. Name and Address of the Institution</Label>
                 <Textarea
@@ -272,7 +319,6 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
                 />
               </div>
 
-              {/* Field 2: Name and Address of Affiliating University */}
               <div className="space-y-2">
                 <Label htmlFor="nameAndAddressOfAffiliatingUniversity">2. Name and address of Affiliating University</Label>
                 <Textarea
@@ -284,7 +330,6 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
                 />
               </div>
 
-              {/* Field 3: Year of Establishment */}
               <div className="space-y-2">
                 <Label htmlFor="yearOfEstablishment">3. Year of Establishment of the Institution</Label>
                 <Input
@@ -296,7 +341,6 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
                 />
               </div>
 
-              {/* Field 4: Type of Institution */}
               <div className="space-y-3">
                 <Label>4. Type of Institution</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -325,7 +369,6 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
                 )}
               </div>
 
-              {/* Field 5: Ownership Status */}
               <div className="space-y-3">
                 <Label>5. Ownership Status</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -348,7 +391,6 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
                   ))}
                 </div>
                 
-                {/* Conditional text field for "Any other specify" */}
                 {formData.ownershipStatus.includes('Any other specify') && (
                   <div className="mt-3">
                     <Label htmlFor="ownershipStatusOther">Please specify:</Label>
@@ -377,6 +419,15 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
 
         {currentStep === 2 && (
           <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Part 2: Additional Information (Fields 6-8)</CardTitle>
+                <CardDescription>
+                  Please provide detailed information about programs and institutions
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
             {/* Field 6: Other Academic Institutions */}
             <Card>
               <CardHeader>
@@ -699,7 +750,7 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
         <div className="flex justify-between items-center pt-6 border-t">
           <div className="flex gap-2">
             {currentStep > 1 && (
-              <Button variant="outline" onClick={handlePreviousStep}>
+              <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
                 <ChevronLeft className="w-4 h-4 mr-2" />
                 Previous
               </Button>
@@ -713,7 +764,7 @@ export default function InstituteInformationForm({ isOpen, onClose, applicationI
             </Button>
             
             {currentStep < 2 ? (
-              <Button onClick={handleNextStep}>
+              <Button onClick={() => setCurrentStep(currentStep + 1)}>
                 Next
                 <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
