@@ -1,445 +1,246 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Calendar, User, ExternalLink, Plus, X, CheckCircle } from 'lucide-react';
-import InstituteLayout from '@/components/InstituteLayout';
+import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus } from 'lucide-react';
+import { sarApplications } from '@/lib/data';
 import InstituteInformationForm from './InstituteInformationForm';
 
-interface SARApplication {
-  applicationId: string;
-  department: string;
-  status: string;
-  progress: number;
-  startDate: string;
-  lastModified: string;
-  modifiedBy: string;
-}
-
 export default function SARApplications() {
-  const [selectedApplicationId, setSelectedApplicationId] = useState<string>('');
+  const [selectedApplication, setSelectedApplication] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [showDepartmentSelection, setShowDepartmentSelection] = useState(false);
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [isNewApplicationOpen, setIsNewApplicationOpen] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [applicationProgresses, setApplicationProgresses] = useState<{[key: string]: number}>({});
 
-  // Institute Information data with state for progress tracking
-  const [instituteInfo, setInstituteInfo] = useState({
-    applicationId: 'RGUKT-IS-20250905',
-    department: 'Institute Information',
-    status: 'Draft',
-    progress: 0,
-    startDate: '6 Sept 2025',
-    lastModified: '6 Sept 2025',
-    modifiedBy: 'rgukt@example.com'
-  });
+  // Load saved progress data from localStorage
+  useEffect(() => {
+    const loadProgressData = () => {
+      const progresses: {[key: string]: number} = {};
+      
+      // Add Institute Information with specific ID
+      const instituteData = localStorage.getItem('institute_form_RGUKT-IS-20250905');
+      if (instituteData) {
+        const parsed = JSON.parse(instituteData);
+        progresses['RGUKT-IS-20250905'] = parsed.progress || 0;
+      } else {
+        progresses['RGUKT-IS-20250905'] = 0;
+      }
+      
+      sarApplications.forEach(app => {
+        const savedData = localStorage.getItem(`institute_form_${app.id}`);
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          progresses[app.id] = parsed.progress || 0;
+        } else {
+          progresses[app.id] = 0;
+        }
+      });
+      
+      setApplicationProgresses(progresses);
+    };
 
-  // Department SAR Applications data - now using state to allow adding new applications
-  const [departmentApplications, setDepartmentApplications] = useState<SARApplication[]>([
-    {
-      applicationId: 'RGUKT-CSE-20250905',
-      department: 'Computer Science and Engineering',
-      status: 'Draft',
-      progress: 0,
-      startDate: '6 Sept 2025',
-      lastModified: '6 Sept 2025',
-      modifiedBy: 'rgukt@example.com'
-    },
-    {
-      applicationId: 'RGUKT-ECE-20250905',
-      department: 'Electronics and Communication Engineering',
-      status: 'Draft',
-      progress: 0,
-      startDate: '6 Sept 2025',
-      lastModified: '6 Sept 2025',
-      modifiedBy: 'rgukt@example.com'
-    }
-  ]);
+    loadProgressData();
+
+    // Listen for storage changes to update progress in real-time
+    const handleStorageChange = () => {
+      loadProgressData();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const handleProgressUpdate = (applicationId: string, progress: number) => {
-    // Update institute info progress
-    if (applicationId === instituteInfo.applicationId) {
-      setInstituteInfo(prev => ({
-        ...prev,
-        progress,
-        lastModified: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-      }));
-    } else {
-      // Update department application progress
-      setDepartmentApplications(prev => 
-        prev.map(app => 
-          app.applicationId === applicationId 
-            ? { 
-                ...app, 
-                progress, 
-                lastModified: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-              }
-            : app
-        )
-      );
-    }
+    setApplicationProgresses(prev => ({
+      ...prev,
+      [applicationId]: progress
+    }));
+
+    // Dispatch custom event for dashboard to listen
+    window.dispatchEvent(new CustomEvent('progressUpdate', { 
+      detail: { applicationId, progress } 
+    }));
   };
 
   const handleFillForm = (applicationId: string) => {
-    setSelectedApplicationId(applicationId);
+    setSelectedApplication(applicationId);
     setIsFormOpen(true);
   };
 
   const handleCloseForm = () => {
     setIsFormOpen(false);
-    setSelectedApplicationId('');
+    setSelectedApplication(null);
   };
 
-  const handleStartNewApplication = () => {
-    setShowDepartmentSelection(true);
-    setSelectedDepartments([]);
-  };
-
-  const handleCloseDepartmentSelection = () => {
-    setShowDepartmentSelection(false);
-    setSelectedDepartments([]);
-  };
-
-  const handleDepartmentToggle = (departmentCode: string, checked: boolean) => {
-    if (checked) {
-      setSelectedDepartments(prev => [...prev, departmentCode]);
-    } else {
-      setSelectedDepartments(prev => prev.filter(code => code !== departmentCode));
+  const handleCreateNewApplication = () => {
+    if (selectedDepartment) {
+      // Here you would typically create a new application
+      console.log('Creating new application for:', selectedDepartment);
+      setIsNewApplicationOpen(false);
+      setSelectedDepartment('');
     }
   };
 
-  const handleCreateApplications = () => {
-    if (selectedDepartments.length === 0) {
-      alert('Please select at least one department to create SAR applications.');
-      return;
-    }
+  const getStatusText = (progress: number) => {
+    if (progress === 0) return 'Draft';
+    if (progress === 100) return 'Completed';
+    return 'In Progress';
+  };
 
-    const currentDate = new Date();
-    const dateString = currentDate.toISOString().slice(0, 10).replace(/-/g, '');
-    const formattedDate = currentDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const getStatusVariant = (progress: number): "default" | "secondary" | "destructive" | "outline" => {
+    if (progress === 0) return 'secondary';
+    if (progress === 100) return 'default';
+    return 'outline';
+  };
 
-    const newApplications: SARApplication[] = selectedDepartments.map(deptCode => {
-      const department = departments.find(d => d.code === deptCode);
-      const newApplicationId = `RGUKT-${deptCode}-${dateString}`;
-
-      return {
-        applicationId: newApplicationId,
-        department: department?.name || '',
-        status: 'Draft',
-        progress: 0,
-        startDate: formattedDate,
-        lastModified: formattedDate,
-        modifiedBy: 'rgukt@example.com'
-      };
-    });
-
-    // Add all new applications to the list
-    setDepartmentApplications(prev => [...prev, ...newApplications]);
-    
-    // Close department selection and reset
-    setShowDepartmentSelection(false);
-    setSelectedDepartments([]);
-    
-    // Show success message
-    const applicationIds = newApplications.map(app => app.applicationId).join(', ');
-    alert(`${newApplications.length} SAR Application(s) created successfully!\nApplication IDs: ${applicationIds}`);
+  const getProgressColor = (progress: number) => {
+    if (progress === 0) return 'bg-gray-300';
+    if (progress < 25) return 'bg-red-500';
+    if (progress < 50) return 'bg-orange-500';
+    if (progress < 75) return 'bg-yellow-500';
+    if (progress < 100) return 'bg-blue-500';
+    return 'bg-green-500';
   };
 
   const departments = [
-    { name: 'Computer Science and Engineering', code: 'CSE', icon: '💻' },
-    { name: 'Electronics and Communication Engineering', code: 'ECE', icon: '📡' },
-    { name: 'Electrical and Electronics Engineering', code: 'EEE', icon: '⚡' },
-    { name: 'Mechanical Engineering', code: 'MECH', icon: '⚙️' },
-    { name: 'Civil Engineering', code: 'CIVIL', icon: '🏗️' },
-    { name: 'Chemical Engineering', code: 'CHEM', icon: '🧪' },
-    { name: 'Information Technology', code: 'IT', icon: '🌐' },
-    { name: 'Biotechnology', code: 'BT', icon: '🧬' },
-    { name: 'Metallurgical Engineering', code: 'MET', icon: '🔩' },
-    { name: 'Aerospace Engineering', code: 'AERO', icon: '✈️' }
+    'Computer Science Engineering',
+    'Electronics and Communication Engineering',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Electrical Engineering',
+    'Information Technology',
+    'Chemical Engineering',
+    'Biotechnology'
   ];
 
-  // Filter out departments that already have applications
-  const availableDepartments = departments.filter(dept => 
-    !departmentApplications.some(app => app.department === dept.name)
-  );
-
-  if (showDepartmentSelection) {
-    return (
-      <InstituteLayout>
-        <div className="space-y-6">
-          {/* Header with close button */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Create New SAR Applications</h1>
-              <p className="text-gray-600 mt-2">
-                Select departments to create Self Assessment Report applications
-              </p>
-            </div>
-            <Button 
-              variant="outline" 
-              onClick={handleCloseDepartmentSelection}
-              className="flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Cancel
-            </Button>
-          </div>
-
-          {/* Department Selection Checklist */}
-          <div className="bg-white border rounded-lg p-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Available Departments</h3>
-                <div className="text-sm text-gray-600">
-                  {selectedDepartments.length} of {availableDepartments.length} selected
-                </div>
-              </div>
-
-              {availableDepartments.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {availableDepartments.map((department) => (
-                    <div 
-                      key={department.code} 
-                      className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <Checkbox
-                        id={department.code}
-                        checked={selectedDepartments.includes(department.code)}
-                        onCheckedChange={(checked) => 
-                          handleDepartmentToggle(department.code, checked as boolean)
-                        }
-                      />
-                      <div className="flex items-center space-x-3 flex-1">
-                        <span className="text-2xl">{department.icon}</span>
-                        <div>
-                          <Label 
-                            htmlFor={department.code} 
-                            className="text-sm font-medium text-gray-900 cursor-pointer"
-                          >
-                            {department.name}
-                          </Label>
-                          <p className="text-xs text-gray-500">Code: {department.code}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">🎉</div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">All Departments Covered!</h3>
-                  <p className="text-gray-600">
-                    SAR applications have been created for all available departments.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            {availableDepartments.length > 0 && (
-              <div className="flex justify-between items-center pt-6 border-t mt-6">
-                <div className="text-sm text-gray-600">
-                  {selectedDepartments.length > 0 && (
-                    <>Selected: {selectedDepartments.join(', ')}</>
-                  )}
-                </div>
-                <div className="space-x-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setSelectedDepartments(availableDepartments.map(d => d.code))}
-                  >
-                    Select All
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setSelectedDepartments([])}
-                  >
-                    Clear All
-                  </Button>
-                  <Button 
-                    onClick={handleCreateApplications}
-                    disabled={selectedDepartments.length === 0}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Create {selectedDepartments.length} Application{selectedDepartments.length !== 1 ? 's' : ''}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </InstituteLayout>
-    );
-  }
+  // Create applications array with Institute Information first
+  const allApplications = [
+    {
+      id: 'RGUKT-IS-20250905',
+      department: 'Institute Information',
+      title: 'Institute Information (RGUKT-IS-20250905)'
+    },
+    ...sarApplications.map(app => ({
+      id: app.id,
+      department: app.department,
+      title: `${app.department} (${app.id})`
+    }))
+  ];
 
   return (
-    <InstituteLayout>
-      <div className="space-y-8">
-        {/* Header */}
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">SAR Applications</h1>
-          <p className="text-gray-600 mt-2">
-            Manage your Self Assessment Report applications for RGUKT Basar
-          </p>
+          <p className="text-gray-600 mt-1">Your department-wise SAR application progress</p>
         </div>
-
-        {/* Institute Information Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 border-2 border-gray-400 rounded flex items-center justify-center">
-              <span className="text-sm font-medium">📋</span>
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">Institute Information</h2>
-          </div>
-
-          <div className="bg-white border rounded-lg overflow-hidden">
-            {/* Table Header */}
-            <div className="grid grid-cols-8 gap-4 px-6 py-3 bg-gray-50 border-b text-sm font-medium text-gray-700">
-              <div>Application ID</div>
-              <div>Department</div>
-              <div>Status</div>
-              <div>Progress</div>
-              <div>Start Date</div>
-              <div>Last Modified</div>
-              <div>Modified By</div>
-              <div>Actions</div>
-            </div>
-
-            {/* Table Row */}
-            <div className="grid grid-cols-8 gap-4 px-6 py-4 items-center border-b last:border-b-0">
-              <div className="text-sm font-medium text-gray-900">
-                {instituteInfo.applicationId}
+        <Dialog open={isNewApplicationOpen} onOpenChange={setIsNewApplicationOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New Application
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New SAR Application</DialogTitle>
+              <DialogDescription>
+                Select a department to create a new Self Assessment Report application.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Department</label>
+                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="text-sm text-gray-600">
-                {instituteInfo.department}
-              </div>
-              <div>
-                <Badge variant="outline" className="bg-gray-100 text-gray-700">
-                  {instituteInfo.status}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-16 bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full" 
-                    style={{ width: `${instituteInfo.progress}%` }}
-                  ></div>
-                </div>
-                <span className="text-sm text-gray-600">{instituteInfo.progress}%</span>
-              </div>
-              <div className="flex items-center gap-1 text-sm text-gray-600">
-                <Calendar className="w-4 h-4" />
-                {instituteInfo.startDate}
-              </div>
-              <div className="flex items-center gap-1 text-sm text-gray-600">
-                <Calendar className="w-4 h-4" />
-                {instituteInfo.lastModified}
-              </div>
-              <div className="flex items-center gap-1 text-sm text-gray-600">
-                <User className="w-4 h-4" />
-                {instituteInfo.modifiedBy}
-              </div>
-              <div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleFillForm(instituteInfo.applicationId)}
-                  className="flex items-center gap-1"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Fill
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setIsNewApplicationOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateNewApplication} disabled={!selectedDepartment}>
+                  Create Application
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Department SAR Applications Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Department SAR Applications</h2>
-            <Button 
-              className="bg-gray-900 hover:bg-gray-800 text-white"
-              onClick={handleStartNewApplication}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Start New Application
-            </Button>
-          </div>
-
-          <div className="bg-white border rounded-lg overflow-hidden">
-            {/* Table Header */}
-            <div className="grid grid-cols-8 gap-4 px-6 py-3 bg-gray-50 border-b text-sm font-medium text-gray-700">
-              <div>Application ID</div>
-              <div>Department</div>
-              <div>Status</div>
-              <div>Progress</div>
-              <div>Start Date</div>
-              <div>Last Modified</div>
-              <div>Modified By</div>
-              <div>Actions</div>
-            </div>
-
-            {/* Table Rows */}
-            {departmentApplications.map((application) => (
-              <div key={application.applicationId} className="grid grid-cols-8 gap-4 px-6 py-4 items-center border-b last:border-b-0">
-                <div className="text-sm font-medium text-gray-900">
-                  {application.applicationId}
-                </div>
-                <div className="text-sm text-gray-600">
-                  {application.department}
-                </div>
-                <div>
-                  <Badge variant="outline" className="bg-gray-100 text-gray-700">
-                    {application.status}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-16 bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full" 
-                      style={{ width: `${application.progress}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-sm text-gray-600">{application.progress}%</span>
-                </div>
-                <div className="flex items-center gap-1 text-sm text-gray-600">
-                  <Calendar className="w-4 h-4" />
-                  {application.startDate}
-                </div>
-                <div className="flex items-center gap-1 text-sm text-gray-600">
-                  <Calendar className="w-4 h-4" />
-                  {application.lastModified}
-                </div>
-                <div className="flex items-center gap-1 text-sm text-gray-600">
-                  <User className="w-4 h-4" />
-                  {application.modifiedBy}
-                </div>
-                <div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleFillForm(application.applicationId)}
-                    className="flex items-center gap-1"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Fill
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Institute Information Form */}
-      <InstituteInformationForm
-        isOpen={isFormOpen}
-        onClose={handleCloseForm}
-        applicationId={selectedApplicationId}
-        onProgressUpdate={handleProgressUpdate}
-      />
-    </InstituteLayout>
+      {/* Applications List */}
+      <div className="space-y-4">
+        {allApplications.map((application) => {
+          const progress = applicationProgresses[application.id] || 0;
+          return (
+            <Card 
+              key={application.id} 
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => handleFillForm(application.id)}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  {/* Left: Dot and Title */}
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="w-3 h-3 bg-gray-400 rounded-full flex-shrink-0"></div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900">{application.title}</h3>
+                    </div>
+                  </div>
+
+                  {/* Center: Status */}
+                  <div className="flex justify-center flex-1">
+                    <Badge variant={getStatusVariant(progress)}>
+                      {getStatusText(progress)}
+                    </Badge>
+                  </div>
+
+                  {/* Right: Progress */}
+                  <div className="flex items-center gap-3 flex-1 justify-end">
+                    <span className="text-sm font-medium text-gray-700">{progress}%</span>
+                    <div className="w-24">
+                      <Progress 
+                        value={progress} 
+                        className="h-2"
+                        style={{
+                          '--progress-background': getProgressColor(progress)
+                        } as React.CSSProperties}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Institute Information Form Dialog */}
+      {selectedApplication && (
+        <InstituteInformationForm
+          isOpen={isFormOpen}
+          onClose={handleCloseForm}
+          applicationId={selectedApplication}
+          onProgressUpdate={handleProgressUpdate}
+        />
+      )}
+    </div>
   );
 }
