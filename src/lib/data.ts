@@ -16,7 +16,12 @@ export const institutions: Institution[] = [
     establishedYear: 2008,
     coordinatorName: 'Dr. Rajesh Kumar',
     coordinatorEmail: 'coordinator@rgukt.ac.in',
-    coordinatorPhone: '+91-9876543210'
+    coordinatorPhone: '+91-9876543210',
+    nbaCoordinator: {
+      name: 'Dr. Rajesh Kumar',
+      contactNumber: '+91-9876543210',
+      email: 'coordinator@rgukt.ac.in'
+    }
   },
   {
     id: '2',
@@ -32,7 +37,12 @@ export const institutions: Institution[] = [
     establishedYear: 1984,
     coordinatorName: 'Dr. Priya Sharma',
     coordinatorEmail: 'coordinator@vit.ac.in',
-    coordinatorPhone: '+91-9876543211'
+    coordinatorPhone: '+91-9876543211',
+    nbaCoordinator: {
+      name: 'Dr. Priya Sharma',
+      contactNumber: '+91-9876543211',
+      email: 'coordinator@vit.ac.in'
+    }
   },
   {
     id: '3',
@@ -41,14 +51,19 @@ export const institutions: Institution[] = [
     institutionCode: 'IITD',
     tierCategory: 'Tier I',
     institutionCategory: 'Engineering',
-    email: 'iitd@example.com',
+    email: 'iit@example.com',
     address: 'New Delhi',
     registeredDate: '2024-01-05T00:00:00.000Z',
     status: 'registered',
     establishedYear: 1961,
     coordinatorName: 'Dr. Amit Singh',
     coordinatorEmail: 'coordinator@iitd.ac.in',
-    coordinatorPhone: '+91-9876543212'
+    coordinatorPhone: '+91-9876543212',
+    nbaCoordinator: {
+      name: 'Dr. Amit Singh',
+      contactNumber: '+91-9876543212',
+      email: 'coordinator@iitd.ac.in'
+    }
   }
 ];
 

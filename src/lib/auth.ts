@@ -18,14 +18,14 @@ const users: User[] = [
   {
     id: '3',
     email: 'vit@example.com',
-    password: 'admin123',
+    password: 'vit123',
     role: 'institute',
     institutionId: '2'
   },
   {
     id: '4',
-    email: 'iitd@example.com',
-    password: 'admin123',
+    email: 'iit@example.com',
+    password: 'iit123',
     role: 'institute',
     institutionId: '3'
   }
@@ -34,19 +34,25 @@ const users: User[] = [
 const CURRENT_USER_KEY = 'compliedu_current_user';
 
 export const login = (email: string, password: string): User | null => {
-  console.log('Login attempt:', { email, password });
+  console.log('=== LOGIN DEBUG ===');
+  console.log('Raw inputs:', { email, password });
   
   // Clean inputs
   const cleanEmail = email.trim().toLowerCase();
   const cleanPassword = password.trim();
   
   console.log('Cleaned inputs:', { cleanEmail, cleanPassword });
-  console.log('Available users:', users.map(u => ({ email: u.email, role: u.role, institutionId: u.institutionId })));
+  console.log('Available users:');
+  users.forEach((u, index) => {
+    console.log(`  ${index + 1}. Email: "${u.email}" | Password: "${u.password}" | Role: "${u.role}"`);
+  });
   
-  const user = users.find(u => 
-    u.email.toLowerCase() === cleanEmail && 
-    u.password === cleanPassword
-  );
+  const user = users.find(u => {
+    const emailMatch = u.email.toLowerCase() === cleanEmail;
+    const passwordMatch = u.password === cleanPassword;
+    console.log(`Checking user ${u.email}: emailMatch=${emailMatch}, passwordMatch=${passwordMatch}`);
+    return emailMatch && passwordMatch;
+  });
   
   console.log('Found user:', user);
   
@@ -54,10 +60,11 @@ export const login = (email: string, password: string): User | null => {
     // Save to localStorage
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
     console.log('User saved to localStorage:', user);
+    console.log('=== LOGIN SUCCESS ===');
     return user;
   }
   
-  console.log('Login failed - user not found');
+  console.log('=== LOGIN FAILED ===');
   return null;
 };
 
