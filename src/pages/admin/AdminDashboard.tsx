@@ -4,222 +4,294 @@ import AdminLayout from '@/components/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getDashboardStats, getInstitutions } from '@/lib/data';
-import { Institution } from '@/lib/types';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
+import { institutions, getSARApplicationsByInstitution } from '@/lib/data';
+import { Institution, SARApplication } from '@/lib/types';
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalRegistered: 0,
-    preQualifiersOngoing: 0,
-    preQualifiersCompleted: 0,
-    sarOngoing: 0,
-    sarCompleted: 0
-  });
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [institutions, setInstitutions] = useState<Institution[]>([]);
   const navigate = useNavigate();
+  const [selectedInstitution, setSelectedInstitution] = useState<Institution | null>(null);
+  const [institutionSARApps, setInstitutionSARApps] = useState<SARApplication[]>([]);
 
-  useEffect(() => {
-    setStats(getDashboardStats());
-    setInstitutions(getInstitutions());
-  }, []);
+  // Calculate dashboard statistics
+  const totalInstitutions = institutions.length;
+  const preQualifiersCompleted = institutions.filter(inst => inst.preQualifiersCompleted).length;
+  
+  // Get institutions with SAR applications (ongoing)
+  const institutionsWithSAR = institutions.filter(inst => {
+    const apps = getSARApplicationsByInstitution(inst.id);
+    return apps.length > 0;
+  });
+  const sarOngoing = institutionsWithSAR.length;
 
-  const getFilteredInstitutions = (status: string) => {
+  const handleInstituteClick = (institution: Institution) => {
+    setSelectedInstitution(institution);
+    // Get SAR applications for this institution
+    const apps = getSARApplicationsByInstitution(institution.id);
+    setInstitutionSARApps(apps);
+  };
+
+  const calculateAverageProgress = (apps: SARApplication[]) => {
+    if (apps.length === 0) return 0;
+    const totalProgress = apps.reduce((sum, app) => sum + app.completionPercentage, 0);
+    return Math.round(totalProgress / apps.length);
+  };
+
+  const getOverallStatus = (apps: SARApplication[]) => {
+    if (apps.length === 0) return 'No Applications';
+    
+    const allCompleted = apps.every(app => app.status === 'completed');
+    const anyInProgress = apps.some(app => app.status === 'in-progress');
+    const allDraft = apps.every(app => app.status === 'draft');
+    
+    if (allCompleted) return 'Completed';
+    if (anyInProgress) return 'In-Progress';
+    if (allDraft) return 'Draft';
+    return 'Mixed Status';
+  };
+
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'registered':
-        return institutions;
-      case 'pre-qualifiers-ongoing':
-        return institutions.filter(i => i.status === 'pre-qualifiers-ongoing');
-      case 'pre-qualifiers-completed':
-        return institutions.filter(i => i.status === 'pre-qualifiers-completed');
-      case 'sar-ongoing':
-        return institutions.filter(i => i.status === 'sar-ongoing');
-      case 'sar-completed':
-        return institutions.filter(i => i.status === 'sar-completed');
-      default:
-        return [];
+      case 'Draft': return 'bg-gray-100 text-gray-800';
+      case 'In-Progress': return 'bg-yellow-100 text-yellow-800';
+      case 'Completed': return 'bg-green-100 text-green-800';
+      case 'Mixed Status': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
-  };
-
-  const getApplicationDates = (institution: Institution) => {
-    const registeredDate = new Date(institution.registeredDate);
-    let startDate: Date;
-    let endDate: Date;
-
-    if (institution.status === 'pre-qualifiers-ongoing' || institution.status === 'pre-qualifiers-completed') {
-      // Pre-qualifier phase: starts from registration, duration 3 months
-      startDate = registeredDate;
-      endDate = new Date(registeredDate);
-      endDate.setMonth(endDate.getMonth() + 3);
-    } else if (institution.status === 'sar-ongoing' || institution.status === 'sar-completed') {
-      // SAR phase: starts after pre-qualifier (3 months after registration), duration 6 months
-      startDate = new Date(registeredDate);
-      startDate.setMonth(startDate.getMonth() + 3);
-      endDate = new Date(startDate);
-      endDate.setMonth(endDate.getMonth() + 6);
-    } else {
-      // For registered institutions, use registration date
-      startDate = registeredDate;
-      endDate = registeredDate;
-    }
-
-    return {
-      startDate: startDate.toLocaleDateString(),
-      endDate: endDate.toLocaleDateString()
-    };
-  };
-
-  const StatCard = ({ title, count, status, description }: { title: string; count: number; status: string; description: string }) => (
-    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedCategory(status)}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold text-blue-600">{count}</div>
-        <p className="text-xs text-gray-500 mt-1">{description}</p>
-      </CardContent>
-    </Card>
-  );
-
-  const isApplicationPhase = (category: string) => {
-    return ['pre-qualifiers-ongoing', 'pre-qualifiers-completed', 'sar-ongoing', 'sar-completed'].includes(category);
   };
 
   return (
-    <AdminLayout title="Admin Dashboard">
+    <AdminLayout title="Dashboard">
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-gray-600">Welcome to CompliEdu Admin Panel</p>
-          </div>
-          <Button onClick={() => navigate('/admin/onboard-institution')}>
-            Onboard New Institution
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard
-            title="Total Registered"
-            count={stats.totalRegistered}
-            status="registered"
-            description="All registered colleges"
-          />
-          <StatCard
-            title="Pre-qualifiers Ongoing"
-            count={stats.preQualifiersOngoing}
-            status="pre-qualifiers-ongoing"
-            description="Currently in progress"
-          />
-          <StatCard
-            title="Pre-qualifiers Completed"
-            count={stats.preQualifiersCompleted}
-            status="pre-qualifiers-completed"
-            description="Successfully completed"
-          />
-          <StatCard
-            title="SAR Ongoing"
-            count={stats.sarOngoing}
-            status="sar-ongoing"
-            description="Currently in progress"
-          />
-          <StatCard
-            title="SAR Completed"
-            count={stats.sarCompleted}
-            status="sar-completed"
-            description="Successfully completed"
-          />
-        </div>
-
-        {selectedCategory && (
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Institution Details</CardTitle>
-                <Button variant="outline" onClick={() => setSelectedCategory(null)}>
-                  Close
-                </Button>
-              </div>
-              <CardDescription>
-                Showing institutions for: {selectedCategory.replace('-', ' ').toUpperCase()}
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Institutions</CardTitle>
+              <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Institution Code</th>
-                      <th className="text-left p-2">Name</th>
-                      <th className="text-left p-2">NBA Coordinator</th>
-                      <th className="text-left p-2">Contact</th>
-                      {isApplicationPhase(selectedCategory) ? (
-                        <>
-                          <th className="text-left p-2">Application Start Date</th>
-                          <th className="text-left p-2">Application End Date</th>
-                        </>
-                      ) : (
-                        <th className="text-left p-2">Registered Date</th>
-                      )}
-                      <th className="text-left p-2">Status</th>
-                      {(selectedCategory === 'pre-qualifiers-ongoing' || selectedCategory === 'sar-ongoing') && (
-                        <th className="text-left p-2">Progress</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {getFilteredInstitutions(selectedCategory).map((institution) => {
-                      const applicationDates = getApplicationDates(institution);
-                      return (
-                        <tr key={institution.id} className="border-b hover:bg-gray-50">
-                          <td className="p-2 font-medium">{institution.institutionCode}</td>
-                          <td className="p-2">{institution.name}</td>
-                          <td className="p-2">{institution.nbaCoordinator.name}</td>
-                          <td className="p-2">{institution.nbaCoordinator.contactNumber}</td>
-                          {isApplicationPhase(selectedCategory) ? (
-                            <>
-                              <td className="p-2">{applicationDates.startDate}</td>
-                              <td className="p-2">{applicationDates.endDate}</td>
-                            </>
-                          ) : (
-                            <td className="p-2">{new Date(institution.registeredDate).toLocaleDateString()}</td>
-                          )}
-                          <td className="p-2">
-                            <Badge variant="outline">
-                              {institution.status.replace('-', ' ')}
-                            </Badge>
-                          </td>
-                          {(selectedCategory === 'pre-qualifiers-ongoing' || selectedCategory === 'sar-ongoing') && (
-                            <td className="p-2">
-                              <div className="flex items-center space-x-2">
-                                <div className="w-16 bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-blue-600 h-2 rounded-full"
-                                    style={{ width: `${institution.completionPercentage || 0}%` }}
-                                  ></div>
+              <div className="text-2xl font-bold">{totalInstitutions}</div>
+              <p className="text-xs text-muted-foreground">Registered institutions</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pre-Qualifiers Completed</CardTitle>
+              <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{preQualifiersCompleted}</div>
+              <p className="text-xs text-muted-foreground">Ready for SAR phase</p>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">SAR Ongoing</CardTitle>
+              <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{sarOngoing}</div>
+              <p className="text-xs text-muted-foreground">Applications in progress</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* SAR Ongoing Institutions */}
+        {sarOngoing > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>SAR Applications in Progress</CardTitle>
+              <CardDescription>Institutions currently working on SAR applications</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {institutionsWithSAR.map((institution) => {
+                  const apps = getSARApplicationsByInstitution(institution.id);
+                  const avgProgress = calculateAverageProgress(apps);
+                  const status = getOverallStatus(apps);
+                  
+                  return (
+                    <Dialog key={institution.id}>
+                      <DialogTrigger asChild>
+                        <Card className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-orange-500">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div>
+                                  <h3 className="font-semibold text-lg">{institution.name}</h3>
+                                  <p className="text-sm text-gray-600">
+                                    {institution.institutionCategory} • Code: {institution.institutionCode}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {apps.length} SAR Application{apps.length > 1 ? 's' : ''} • {apps.filter(app => app.departmentId !== 'institute-info').length} Department{apps.filter(app => app.departmentId !== 'institute-info').length !== 1 ? 's' : ''}
+                                  </p>
                                 </div>
-                                <span className="text-xs">{institution.completionPercentage || 0}%</span>
                               </div>
-                              {institution.lastUpdated && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Updated: {new Date(institution.lastUpdated).toLocaleDateString()}
+                              <div className="text-right">
+                                <Badge className={getStatusColor(status)}>
+                                  {status}
+                                </Badge>
+                                <div className="mt-2 w-24">
+                                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                                    <span>Progress</span>
+                                    <span>{avgProgress}%</span>
+                                  </div>
+                                  <Progress value={avgProgress} className="h-2" />
                                 </div>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {getFilteredInstitutions(selectedCategory).length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    No institutions found for this category
-                  </div>
-                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>{institution.name} - SAR Application Details</DialogTitle>
+                          <DialogDescription>
+                            Detailed view of SAR applications and progress
+                          </DialogDescription>
+                        </DialogHeader>
+                        
+                        <div className="space-y-6">
+                          {/* Institution Info */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2">Institution Details</h4>
+                              <div className="space-y-1 text-sm">
+                                <p><span className="font-medium">Category:</span> {institution.institutionCategory}</p>
+                                <p><span className="font-medium">Code:</span> {institution.institutionCode}</p>
+                                <p><span className="font-medium">AISHE Code:</span> {institution.aisheCode || 'N/A'}</p>
+                                <p><span className="font-medium">Email:</span> {institution.email || 'N/A'}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2">SAR Statistics</h4>
+                              <div className="space-y-1 text-sm">
+                                <p><span className="font-medium">Total Applications:</span> {apps.length}</p>
+                                <p><span className="font-medium">No. of Departments:</span> {apps.filter(app => app.departmentId !== 'institute-info').length}</p>
+                                <p><span className="font-medium">Overall Status:</span> <Badge className={`${getStatusColor(status)} text-xs`}>{status}</Badge></p>
+                                <p><span className="font-medium">Average Progress:</span> {avgProgress}%</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Applications List */}
+                          <div>
+                            <h4 className="font-medium text-gray-900 mb-3">SAR Applications</h4>
+                            <div className="space-y-3">
+                              {apps.map((app) => (
+                                <Card key={app.id} className={`${app.departmentId === 'institute-info' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
+                                  <CardContent className="p-4">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center space-x-3">
+                                        {app.departmentId === 'institute-info' ? (
+                                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                          </svg>
+                                        ) : (
+                                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                        )}
+                                        <div>
+                                          <h5 className="font-medium">{app.applicationId}</h5>
+                                          <p className="text-sm text-gray-600">{app.departmentName}</p>
+                                          <p className="text-xs text-gray-500">
+                                            Started: {new Date(app.applicationStartDate).toLocaleDateString()}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <Badge className={getStatusColor(app.status === 'draft' ? 'Draft' : app.status === 'in-progress' ? 'In-Progress' : 'Completed')}>
+                                          {app.status === 'draft' ? 'Draft' : app.status === 'in-progress' ? 'In-Progress' : 'Completed'}
+                                        </Badge>
+                                        <div className="mt-2 w-24">
+                                          <div className="flex justify-between text-xs text-gray-600 mb-1">
+                                            <span>Progress</span>
+                                            <span>{app.completionPercentage}%</span>
+                                          </div>
+                                          <Progress value={app.completionPercentage} className="h-2" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         )}
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Institution Management</CardTitle>
+              <CardDescription>Manage registered institutions</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => navigate('/admin/onboard-institution')}
+              >
+                <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Onboard New Institution
+              </Button>
+              <Button 
+                className="w-full justify-start" 
+                variant="outline"
+                onClick={() => navigate('/admin/view-institutions')}
+              >
+                <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                View All Institutions
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>System Overview</CardTitle>
+              <CardDescription>Monitor system activity</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Active SAR Applications</span>
+                  <Badge variant="secondary">{institutionsWithSAR.reduce((total, inst) => total + getSARApplicationsByInstitution(inst.id).length, 0)}</Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Institutions with SAR</span>
+                  <Badge variant="secondary">{sarOngoing}</Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Pre-Qualifiers Completed</span>
+                  <Badge variant="secondary">{preQualifiersCompleted}</Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </AdminLayout>
   );

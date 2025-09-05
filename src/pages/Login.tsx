@@ -12,25 +12,42 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     console.log('Form submitted with:', { email, password });
 
-    const user = login(email, password);
-    if (user) {
-      console.log('Login successful, redirecting...');
-      if (user.role === 'admin') {
-        navigate('/admin/dashboard');
+    try {
+      const user = login(email, password);
+      if (user) {
+        console.log('Login successful, user:', user);
+        
+        // Dispatch custom event to notify App component
+        window.dispatchEvent(new CustomEvent('userLogin'));
+        
+        // Small delay to ensure state updates
+        setTimeout(() => {
+          console.log('Redirecting user...');
+          if (user.role === 'admin') {
+            navigate('/admin/dashboard', { replace: true });
+          } else {
+            navigate('/institute/dashboard', { replace: true });
+          }
+        }, 100);
       } else {
-        navigate('/institute/dashboard');
+        console.log('Login failed, showing error');
+        setError('Invalid email or password');
       }
-    } else {
-      console.log('Login failed, showing error');
-      setError('Invalid email or password');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An error occurred during login. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -70,6 +87,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -83,12 +101,20 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
+                  disabled={isLoading}
                 />
               </div>
             )}
 
-            <Button type="submit" className="w-full">
-              {showForgotPassword ? 'Send Reset Link' : 'Sign In'}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Signing In...
+                </div>
+              ) : (
+                showForgotPassword ? 'Send Reset Link' : 'Sign In'
+              )}
             </Button>
           </form>
 
@@ -100,6 +126,7 @@ export default function Login() {
                 setShowForgotPassword(!showForgotPassword);
                 setError('');
               }}
+              disabled={isLoading}
             >
               {showForgotPassword ? 'Back to Login' : 'Forgot Password?'}
             </Button>

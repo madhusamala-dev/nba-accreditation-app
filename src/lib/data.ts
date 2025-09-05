@@ -17,10 +17,12 @@ export const institutions: Institution[] = [
     coordinatorName: 'Dr. Rajesh Kumar',
     coordinatorEmail: 'coordinator@rgukt.ac.in',
     coordinatorPhone: '+91-9876543210',
+    preQualifiersCompleted: true,
     nbaCoordinator: {
       name: 'Dr. Rajesh Kumar',
       contactNumber: '+91-9876543210',
-      email: 'coordinator@rgukt.ac.in'
+      email: 'coordinator@rgukt.ac.in',
+      designation: 'Professor'
     }
   },
   {
@@ -38,10 +40,12 @@ export const institutions: Institution[] = [
     coordinatorName: 'Dr. Priya Sharma',
     coordinatorEmail: 'coordinator@vit.ac.in',
     coordinatorPhone: '+91-9876543211',
+    preQualifiersCompleted: true,
     nbaCoordinator: {
       name: 'Dr. Priya Sharma',
       contactNumber: '+91-9876543211',
-      email: 'coordinator@vit.ac.in'
+      email: 'coordinator@vit.ac.in',
+      designation: 'Professor'
     }
   },
   {
@@ -59,10 +63,12 @@ export const institutions: Institution[] = [
     coordinatorName: 'Dr. Amit Singh',
     coordinatorEmail: 'coordinator@iitd.ac.in',
     coordinatorPhone: '+91-9876543212',
+    preQualifiersCompleted: true,
     nbaCoordinator: {
       name: 'Dr. Amit Singh',
       contactNumber: '+91-9876543212',
-      email: 'coordinator@iitd.ac.in'
+      email: 'coordinator@iitd.ac.in',
+      designation: 'Professor'
     }
   }
 ];
@@ -113,6 +119,9 @@ const saveSARApplicationsToStorage = (applications: SARApplication[]): void => {
     console.error('Error saving SAR applications to storage:', error);
   }
 };
+
+// Export sarApplications as a getter function that reads from localStorage
+export const sarApplications = getSARApplicationsFromStorage();
 
 export const getInstitutionById = (id: string): Institution | undefined => {
   console.log('getInstitutionById called with ID:', id);
@@ -287,7 +296,7 @@ export const getDashboardStats = () => {
     draftApplications: allApplications.filter(app => app.status === 'draft').length,
     submittedApplications: allApplications.filter(app => app.status === 'submitted').length,
     preQualifiersOngoing: 0,
-    preQualifiersCompleted: 0,
+    preQualifiersCompleted: institutions.filter(inst => inst.preQualifiersCompleted).length,
     sarOngoing: allApplications.filter(app => app.status === 'in-progress').length,
     sarCompleted: allApplications.filter(app => app.status === 'completed').length
   };
